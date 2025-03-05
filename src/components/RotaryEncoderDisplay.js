@@ -4,14 +4,14 @@ const RotaryEncoderDisplay = () => {
   const [value, setValue] = useState(30);
   
   // For development only - set to true to use fake data instead of connecting to Pi
-  const DEV_MODE = false;
+  const SIMULATION_MODE = false;
   
   // Your Raspberry Pi's IP address - replace with your actual Pi's IP
   const PI_API_URL = 'http://raspberrypi.local:8080/api';
   
   // Function to fetch the current value
   const fetchValue = async () => {
-    if (DEV_MODE) {
+    if (SIMULATION_MODE) {
       // In dev mode, just generate random values between 30-200
       setValue(Math.floor(Math.random() * (200 - 30 + 1)) + 30);
       return;
@@ -43,12 +43,10 @@ const RotaryEncoderDisplay = () => {
   
   return (
     <div style={{ 
-      display: 'flex', 
-      justifyContent: 'center', 
-      alignItems: 'center', 
-      height: '100vh', 
       fontSize: '48px', 
-      fontWeight: 'bold' 
+      fontWeight: 'bold',
+      padding: '20px',
+      borderRadius: '10px',
     }}>
       {value}
     </div>
