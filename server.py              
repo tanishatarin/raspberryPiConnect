@@ -1,129 +1,70 @@
-from flask import Flask, jsonify, request
-from flask_cors import CORS
-import RPi.GPIO as GPIO
+from flask import Flask, jsonify
+from gpiozero import RotaryEncoder, Button
 import threading
 import time
 
 app = Flask(__name__)
-CORS(app)  # This handles CORS more cleanly than manual headers
 
-# GPIO Setup - using RPi.GPIO instead of gpiozero for more direct control
-GPIO.setmode(GPIO.BCM)
-GPIO.setwarnings(False)
+# Add CORS headers to allow requests from your React app
+@app.after_request
+def add_cors_headers(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+    return response
 
-# Define GPIO pins
-ROTARY_CLK = 27    # Clock pin
-ROTARY_DT = 22     # Data pin
-BUTTON_PIN = 25    # Button pin
+# Set up the rotary encoder (CLK=GPIO17, DT=GPIO18)
+encoder = RotaryEncoder(27, 22, max_steps=200, wrap=False)
 
-# Setup pins
-GPIO.setup(ROTARY_CLK, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-GPIO.setup(ROTARY_DT, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-GPIO.setup(BUTTON_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+# Set up the button (SW=GPIO27)
+button = Button(25)
 
-# Global variables
-counter = 30
-counter_min = 30
-counter_max = 200
-clk_last_state = GPIO.input(ROTARY_CLK)
-button_last_state = GPIO.input(BUTTON_PIN)
-lock = threading.Lock()
+# Starting value
+encoder.steps = 30
 
-def read_encoder():
-    global counter, clk_last_state
-    
-    try:
-        clk_state = GPIO.input(ROTARY_CLK)
-        dt_state = GPIO.input(ROTARY_DT)
-        
-        if clk_state != clk_last_state:
-            if dt_state != clk_state:
-                # Clockwise rotation
-                with lock:
-                    counter = min(counter + 1, counter_max)
-            else:
-                # Counter-clockwise rotation
-                with lock:
-                    counter = max(counter - 1, counter_min)
-            
-            print(f"Counter: {counter}")
-        
-        clk_last_state = clk_state
-    except Exception as e:
-        print(f"Error reading encoder: {e}")
+# Global variable to track encoder value safely
+current_value = 30
 
-def check_button():
-    global counter, button_last_state
-    
-    try:
-        button_state = GPIO.input(BUTTON_PIN)
-        
-        # Button pressed (falling edge)
-        if button_state == GPIO.LOW and button_last_state == GPIO.HIGH:
-            with lock:
-                counter = counter_min
-            print(f"Button pressed, reset to {counter_min}")
-            
-        button_last_state = button_state
-    except Exception as e:
-        print(f"Error reading button: {e}")
+# Function to print the current value
+def show_value():
+    global current_value
+    current_value = max(30, min(encoder.steps, 200))
+    encoder.steps = current_value
+    print(f"Current Value: {encoder.steps}")
 
-# API endpoints
+# Function to reset the encoder value
+def reset_value():
+    global current_value
+    encoder.steps = 30
+    current_value = 30
+    print("Reset to 30!")
+
+# Attach event listeners
+encoder.when_rotated = show_value
+button.when_pressed = reset_value
+
+# API endpoints for React
 @app.route('/api/value', methods=['GET'])
 def get_value():
-    with lock:
-        current = counter
-    
+    global current_value
+    # Ensure we're returning the most up-to-date value
+    current_value = max(30, min(encoder.steps, 200))
     return jsonify({
-        'value': current,
-        'min': counter_min,
-        'max': counter_max
+        'value': current_value,
+        'min': 30,
+        'max': 200
     })
 
 @app.route('/api/reset', methods=['POST'])
-def reset_value():
-    global counter
-    
-    with lock:
-        counter = counter_min
-    
-    return jsonify({
-        'success': True,
-        'value': counter_min
-    })
+def api_reset():
+    reset_value()
+    return jsonify({'success': True, 'value': current_value})
 
-# Health check endpoint
+# Health check endpoint to verify the server is running
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    return jsonify({
-        'status': 'ok',
-        'gpio_enabled': True
-    })
-
-# Background thread function
-def background_task():
-    print("Background monitoring thread started")
-    try:
-        while True:
-            read_encoder()
-            check_button()
-            time.sleep(0.01)  # 10ms polling interval
-    except Exception as e:
-        print(f"Background thread error: {e}")
+    return jsonify({'status': 'ok'})
 
 if __name__ == '__main__':
-    try:
-        # Start background thread
-        bg_thread = threading.Thread(target=background_task)
-        bg_thread.daemon = True
-        bg_thread.start()
-        
-        # Start Flask server
-        print("Starting Flask server...")
-        app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
-    
-    except KeyboardInterrupt:
-        print("Stopping server...")
-    finally:
-        GPIO.cleanup()
-        print("GPIO cleaned up")
+    print("Rotary Encoder Server Started. Connect to /api/value to get current value.")
+    app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
