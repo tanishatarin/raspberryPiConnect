@@ -1,17 +1,26 @@
 from flask import Flask, jsonify
-from flask_cors import CORS
-import gpiozero
+from gpiozero.pins.pigpio import PiGPIOFactory
 from gpiozero import RotaryEncoder, Button
 import threading
 import time
 
-app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+# Set up pigpio pin factory
+factory = PiGPIOFactory()
 
-# Set up the rotary encoder (CLK=GPIO17, DT=GPIO18)
-encoder = RotaryEncoder(27, 22, max_steps=200, wrap=False)
-# Set up the button (SW=GPIO27)
-button = Button(25)
+app = Flask(__name__)
+
+# Add CORS headers
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    return response
+
+# Set up the rotary encoder with explicit pin factory
+encoder = RotaryEncoder(27, 22, pin_factory=factory, max_steps=200, wrap=False)
+# Set up the button with explicit pin factory
+button = Button(25, pin_factory=factory)
 
 # Starting value
 encoder.steps = 30
