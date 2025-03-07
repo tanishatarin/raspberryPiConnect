@@ -1,75 +1,129 @@
-from flask import Flask, jsonify
-from gpiozero.pins.pigpio import PiGPIOFactory
-from gpiozero import RotaryEncoder, Button
+from flask import Flask, jsonify, request
+from flask_cors import CORS
+import RPi.GPIO as GPIO
 import threading
 import time
 
-# Set up pigpio pin factory
-factory = PiGPIOFactory()
-
 app = Flask(__name__)
+CORS(app)  # This handles CORS more cleanly than manual headers
 
-# Add CORS headers
-@app.after_request
-def after_request(response):
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-    return response
+# GPIO Setup - using RPi.GPIO instead of gpiozero for more direct control
+GPIO.setmode(GPIO.BCM)
+GPIO.setwarnings(False)
 
-# Set up the rotary encoder with explicit pin factory
-encoder = RotaryEncoder(27, 22, pin_factory=factory, max_steps=200, wrap=False)
-# Set up the button with explicit pin factory
-button = Button(25, pin_factory=factory)
+# Define GPIO pins
+ROTARY_CLK = 27    # Clock pin
+ROTARY_DT = 22     # Data pin
+BUTTON_PIN = 25    # Button pin
 
-# Starting value
-encoder.steps = 30
+# Setup pins
+GPIO.setup(ROTARY_CLK, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+GPIO.setup(ROTARY_DT, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+GPIO.setup(BUTTON_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-# Current value storage (for thread safety)
-current_value = 30
+# Global variables
+counter = 30
+counter_min = 30
+counter_max = 200
+clk_last_state = GPIO.input(ROTARY_CLK)
+button_last_state = GPIO.input(BUTTON_PIN)
+lock = threading.Lock()
 
-# Function to clamp values within 30-200
-def update_value():
-    global current_value
-    current_value = max(30, min(encoder.steps, 200))
-    encoder.steps = current_value
+def read_encoder():
+    global counter, clk_last_state
+    
+    try:
+        clk_state = GPIO.input(ROTARY_CLK)
+        dt_state = GPIO.input(ROTARY_DT)
+        
+        if clk_state != clk_last_state:
+            if dt_state != clk_state:
+                # Clockwise rotation
+                with lock:
+                    counter = min(counter + 1, counter_max)
+            else:
+                # Counter-clockwise rotation
+                with lock:
+                    counter = max(counter - 1, counter_min)
+            
+            print(f"Counter: {counter}")
+        
+        clk_last_state = clk_state
+    except Exception as e:
+        print(f"Error reading encoder: {e}")
 
-# Function to reset the encoder value
-def reset_value():
-    global current_value
-    encoder.steps = 30
-    current_value = 30
-    print("Reset to 30!")
-
-# Attach event listeners
-encoder.when_rotated = update_value
-button.when_pressed = reset_value
+def check_button():
+    global counter, button_last_state
+    
+    try:
+        button_state = GPIO.input(BUTTON_PIN)
+        
+        # Button pressed (falling edge)
+        if button_state == GPIO.LOW and button_last_state == GPIO.HIGH:
+            with lock:
+                counter = counter_min
+            print(f"Button pressed, reset to {counter_min}")
+            
+        button_last_state = button_state
+    except Exception as e:
+        print(f"Error reading button: {e}")
 
 # API endpoints
 @app.route('/api/value', methods=['GET'])
 def get_value():
+    with lock:
+        current = counter
+    
     return jsonify({
-        'value': current_value,
-        'min': 30,
-        'max': 200
+        'value': current,
+        'min': counter_min,
+        'max': counter_max
     })
 
 @app.route('/api/reset', methods=['POST'])
-def reset_endpoint():
-    reset_value()
-    return jsonify({'success': True, 'value': current_value})
+def reset_value():
+    global counter
+    
+    with lock:
+        counter = counter_min
+    
+    return jsonify({
+        'success': True,
+        'value': counter_min
+    })
 
-# Background thread to update value periodically
-def background_update():
-    while True:
-        update_value()
-        time.sleep(0.1)
+# Health check endpoint
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    return jsonify({
+        'status': 'ok',
+        'gpio_enabled': True
+    })
+
+# Background thread function
+def background_task():
+    print("Background monitoring thread started")
+    try:
+        while True:
+            read_encoder()
+            check_button()
+            time.sleep(0.01)  # 10ms polling interval
+    except Exception as e:
+        print(f"Background thread error: {e}")
 
 if __name__ == '__main__':
-    # Start background thread
-    bg_thread = threading.Thread(target=background_update)
-    bg_thread.daemon = True
-    bg_thread.start()
+    try:
+        # Start background thread
+        bg_thread = threading.Thread(target=background_task)
+        bg_thread.daemon = True
+        bg_thread.start()
+        
+        # Start Flask server
+        print("Starting Flask server...")
+        app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
     
-    # Run the Flask app
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    except KeyboardInterrupt:
+        print("Stopping server...")
+    finally:
+        GPIO.cleanup()
+        print("GPIO cleaned up")
