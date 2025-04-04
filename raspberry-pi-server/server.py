@@ -23,7 +23,7 @@ button = Button(25)
 encoder.steps = 30
 
 # Global variable to track encoder value safely
-current_value = 30
+current_value = 40
 
 # Function to print the current value
 def show_value():
