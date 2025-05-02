@@ -73,19 +73,3 @@ if __name__ == '__main__':
     print("Rotary Encoder Server Started. Connect to /api/value to get current value.")
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
     
-# This code sets up a Flask server that interacts with a rotary encoder and a button.
-# The rotary encoder is used to adjust a value between 30 and 200, and the button resets the value to 30.
-# The server provides API endpoints to get the current value, reset it, and check the server's health.
-# The server also includes CORS headers to allow requests from a React app.
-# The encoder's value is printed to the console whenever it is changed, and the server runs on port 5000.
-
-# The server is designed to be run on a Raspberry Pi, and it uses the gpiozero library to interact with the GPIO pins.
-# The Flask app is set to run in debug mode, which is useful for development but should be turned off in production.
-
-# The server is designed to be run on a Raspberry Pi, and it uses the gpiozero library to interact with the GPIO pins.
-# The Flask app is set to run in debug mode, which is useful for development but should be turned off in production.
-# The server is designed to be run on a Raspberry Pi, and it uses the gpiozero library to interact with the GPIO pins.
-# The Flask app is set to run in debug mode, which is useful for development but should be turned off in production.
-# The server is designed to be run on a Raspberry Pi, and it uses the gpiozero library to interact with the GPIO pins.
-
-    
