@@ -45,6 +45,23 @@ button.when_pressed = reset_value
 
 # API endpoints for React
 @app.route('/api/value', methods=['GET'])
+"""
+Handles GET requests to the '/api/value' endpoint.
+
+This endpoint retrieves the current value of the encoder steps, ensuring
+it is clamped between a minimum value of 30 and a maximum value of 200.
+The response is returned in JSON format, including the current value,
+minimum value, and maximum value.
+
+Global Variables:
+    current_value (int): The current value of the encoder steps.
+
+Returns:
+    Response: A JSON response containing:
+        - 'value' (int): The clamped current value of the encoder steps.
+        - 'min' (int): The minimum allowed value (30).
+        - 'max' (int): The maximum allowed value (200).
+"""
 def get_value():
     global current_value
     # Ensure we're returning the most up-to-date value
