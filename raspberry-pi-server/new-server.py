@@ -73,3 +73,25 @@ if __name__ == '__main__':
     print("Rotary Encoder Server Started. Connect to /api/value to get current value.")
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
     
+if __name__ == '__main__':
+    # Set up logging
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+
+    # Signal handler to gracefully shut down the server
+    def signal_handler(sig, frame):
+        logger.info("Shutting down server...")
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+
+    # Start the Flask app
+    try:
+        app.run(host='  help' )
+    except Exception as e:
+        logger.error(f"Error starting server: {e}")
+        sys.exit(1)
+        
+        
+        #dadded random shit cod e 
